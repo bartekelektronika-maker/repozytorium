@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Odtwarzacz MP4, Audio i Zdjęć</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #0d0d0d;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Panel sterowania w prawym górnym rogu */
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .btn {
+            background: #ff4500;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            border: none;
+        }
+
+        .btn:hover {
+            background: #ff6a00;
+            transform: scale(1.05);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        /* Kontener na odtwarzany materiał */
+        #content-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding-top: 60px;
+        }
+
+        video {
+            max-width: 90%;
+            max-height: 85%;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(255, 69, 0, 0.4);
+            outline: none;
+        }
+
+        .image-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            max-width: 90%;
+            max-height: 85%;
+            overflow-y: auto;
+            justify-content: center;
+            padding: 10px;
+        }
+
+        .image-gallery img {
+            max-width: 300px;
+            max-height: 300px;
+            object-fit: cover;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+        }
+
+        /* Lista odtwarzacza Audio */
+        .audio-playlist {
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(255, 69, 0, 0.3);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .audio-item {
+            background: #282828;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .audio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .audio-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #ff8c00;
+            word-break: break-all;
+        }
+
+        .btn-delete {
+            background: #e63946;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-delete:hover {
+            background: #ff4d4d;
+        }
+
+        audio {
+            width: 100%;
+            height: 36px;
+        }
+
+        .placeholder-text {
+            color: #888;
+            font-size: 18px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Przyciski w prawym górnym rogu -->
+    <div class="controls">
+        <label for="video-input" class="btn">Wybierz MP4</label>
+        <input type="file" id="video-input" accept="video/mp4">
+
+        <label for="image-input" class="btn">Wybierz Zdjęcia</label>
+        <input type="file" id="image-input" accept="image/*" multiple>
+
+        <!-- Zmieniony filtr: obsługuje MP3, M4A, AAC, WAV, OGG -->
+        <label for="audio-input" class="btn">Wybierz Muzykę (MP3 / M4A)</label>
+        <input type="file" id="audio-input" accept="audio/*, .mp3, .m4a, .aac, .wav, .ogg" multiple>
+    </div>
+
+    <!-- Główny obszar wyświetlania -->
+    <div id="content-container">
+        <p class="placeholder-text">Użyj przycisków w prawym górnym rogu, aby wczytać pliki MP4, zdjęcia lub muzykę (MP3 / M4A).</p>
+    </div>
+
+    <script>
+        const videoInput = document.getElementById('video-input');
+        const imageInput = document.getElementById('image-input');
+        const audioInput = document.getElementById('audio-input');
+        const container = document.getElementById('content-container');
+
+        // Baza danych IndexedDB do trwałego przechowywania plików audio
+        let db;
+        const request = indexedDB.open("AudioLibraryDB", 2);
+
+        request.onupgradeneeded = function(e) {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains("tracks")) {
+                db.createObjectStore("tracks", { keyPath: "id", autoIncrement: true });
+            }
+        };
+
+        request.onsuccess = function(e) {
+            db = e.target.result;
+        };
+
+        // Wybór wideo MP4
+        videoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const fileURL = URL.createObjectURL(file);
+                container.innerHTML = `
+                    <video controls autoplay playsinline src="${fileURL}">
+                        Twoja przeglądarka nie obsługuje odtwarzania wideo.
+                    </video>
+                `;
+            }
+        });
+
+        // Wybór zdjęć
+        imageInput.addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                container.innerHTML = '<div class="image-gallery" id="gallery"></div>';
+                const gallery = document.getElementById('gallery');
+
+                Array.from(files).forEach(file => {
+                    const imgURL = URL.createObjectURL(file);
+                    const img = document.createElement('img');
+                    img.src = imgURL;
+                    gallery.appendChild(img);
+                });
+            }
+        });
+
+        // Wybór plików audio (MP3, M4A i inne) i ich zapis do bazy
+        audioInput.addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                const tx = db.transaction("tracks", "readwrite");
+                const store = tx.objectStore("tracks");
+
+                Array.from(files).forEach(file => {
+                    store.add({ name: file.name, data: file });
+                });
+
+                tx.oncomplete = function() {
+                    renderAudioPlaylist();
+                };
+            }
+        });
+
+        // Wyświetlanie listy utworów audio
+        function renderAudioPlaylist() {
+            container.innerHTML = '<div class="audio-playlist" id="playlist"><h2>Twoja Biblioteka Muzyczna</h2></div>';
+            const playlist = document.getElementById('playlist');
+
+            const tx = db.transaction("tracks", "readonly");
+            const store = tx.objectStore("tracks");
+            const request = store.getAll();
+
+            request.onsuccess = function() {
+                const tracks = request.result;
+                if (tracks.length === 0) {
+                    playlist.innerHTML += '<p class="placeholder-text">Brak zapisanych utworów.</p>';
+                    return;
+                }
+
+                tracks.forEach(track => {
+                    const audioURL = URL.createObjectURL(track.data);
+                    const item = document.createElement('div');
+                    item.className = 'audio-item';
+                    item.innerHTML = `
+                        <div class="audio-header">
+                            <span class="audio-title">${track.name}</span>
+                            <button class="btn-delete" onclick="deleteTrack(${track.id})">Usuń</button>
+                        </div>
+                        <audio controls src="${audioURL}"></audio>
+                    `;
+                    playlist.appendChild(item);
+                });
+            };
+        }
+
+        // Usuwanie utworu z bazy
+        window.deleteTrack = function(id) {
+            const tx = db.transaction("tracks", "readwrite");
+            const store = tx.objectStore("tracks");
+            store.delete(id);
+            tx.oncomplete = function() {
+                renderAudioPlaylist();
+            };
+        };
+    </script>
+
+</body>
+</html>
